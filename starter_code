@@ -208,3 +208,123 @@ def sum_grouped_items(grouped_data, field_name):
     return summed_data
     
 total_minutes_by_account = sum_grouped_items(engagement_by_account, 'total_minutes_visited')
+
+import numpy as np
+
+# Summarize the data about minutes spent in the classroom
+total_minutes = total_minutes_by_account.values()
+
+## Go through a similar process as before to see if there is a problem.
+## Locate at least one surprising piece of data, output it, and take a look at it.
+
+max_mins = 0
+max_account = 0
+for i in total_minutes_by_account:
+    if total_minutes_by_account[i] > max_mins:
+        max_account = i
+        max_mins += total_minutes_by_account[i]
+
+
+## Adapt the code above to find the mean, standard deviation, minimum, and maximum for
+## the number of lessons completed by each student during the first week. Try creating
+## one or more functions to re-use the code above.
+
+total_lessons_by_account = {}
+for account_key, engagement_for_student in engagement_by_account.items():
+    total_lessons = 0
+    for engagement_record in engagement_for_student:
+        total_lessons += engagement_record['lessons_completed']
+    total_lessons_by_account[account_key] = total_lessons
+    
+def stats_anal(data):
+    new_data = data.values()
+    print 'Mean:', np.mean(new_data)
+    print 'Standard Deviation:', np.std(new_data)
+    print 'Max:', np.max(new_data)
+    print 'Min:', np.min(new_data)
+
+stats_anal(total_lessons_by_account)
+
+
+## Find the mean, standard deviation, minimum, and maximum for the number of
+## days each student visits the classroom during the first week.
+
+for i in paid_engagement:
+    if i['num_courses_visited'] != 0:
+        i['has_visited'] = 1
+    else:
+        i['has_visited'] = 0
+        
+total_days_by_account = sum_grouped_items(engagement_by_account, 'has_visited')     
+stats_anal(total_days_by_account)
+
+## Create two lists of engagement data for paid students in the first week.
+## The first list should contain data for students who eventually pass the
+## subway project, and the second list should contain data for students
+## who do not.
+
+subway_project_lesson_keys = ['746169184', '3176718735']
+
+passing_engagement = []
+non_passing_engagement = []
+
+passing_accounts = set()
+non_passing_accounts = set()
+
+for i in paid_submissions:
+    account_key = i['account_key']
+    rating = i['assigned_rating']
+    lesson = i['lesson_key']
+    if ((lesson in subway_project_lesson_keys) and (rating == 'PASSED' or rating == 'DISTINCTION')):
+        passing_accounts.add(account_key)
+       
+for i in paid_submissions:
+    account_key = i['account_key']
+    rating = i['assigned_rating']
+    lesson = i['lesson_key']
+    if ((lesson in subway_project_lesson_keys) and (rating != 'PASSED' or rating != 'DISTINCTION')):
+        non_passing_accounts.add(account_key)
+        
+for i in paid_engagement_in_first_week:
+    if i['account_key'] in passing_accounts:
+        passing_engagement.append(i)
+    else:
+        non_passing_engagement.append(i)
+        
+## Compute some metrics you're interested in and see how they differ for
+## students who pass the subway project vs. students who don't. A good
+## starting point would be the metrics we looked at earlier (minutes spent
+## in the classroom, lessons completed, and days visited).
+
+passing_engagement_by_account = group_data(passing_engagement, 'account_key')
+total_mins = sum_grouped_items(passing_engagement_by_account, 'total_minutes_visited')
+stats_anal(total_mins)
+
+non_passing_engagement_by_account = group_data(non_passing_engagement, 'account_key')
+total_mins_2 = sum_grouped_items(non_passing_engagement_by_account, 'total_minutes_visited')
+stats_anal(total_mins_2)
+
+lessons_completed = sum_grouped_items(passing_engagement_by_account, 'lessons_completed')
+lessons_completed_2 = sum_grouped_items(non_passing_engagement_by_account, 'lessons_completed')
+
+days_visited = sum_grouped_items(passing_engagement_by_account, 'has_visited')
+days_visited_2 = sum_grouped_items(non_passing_engagement_by_account, 'has_visited')
+
+## Make histograms of the three metrics we looked at earlier for both
+## students who passed the subway project and students who didn't. You
+## might also want to make histograms of any other metrics you examined.
+
+%matplotlib inline
+import matplotlib.pyplot as plt
+plt.hist(total_mins.values())
+plt.hist(total_mins_2.values())
+
+plt.hist(lessons_completed.values())
+plt.hist(lessons_completed_2.values())
+
+import seaborn as sns
+
+plt.hist(days_visited.values(), bins = 14)
+plt.hist(days_visited_2.values(), bins = 14)
+
+sns.distplot(days_visited.values())
