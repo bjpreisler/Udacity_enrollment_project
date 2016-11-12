@@ -53,3 +53,158 @@ for enrollment in enrollments:
     enrollment['is_canceled'] = enrollment['is_canceled'] == 'True'
     enrollment['is_udacity'] = enrollment['is_udacity'] == 'True'
     enrollment['join_date'] = parse_date(enrollment['join_date'])
+
+# Clean up the data types in the engagement table
+for engagement_record in daily_engagement:
+    engagement_record['lessons_completed'] = int(float(engagement_record['lessons_completed']))
+    engagement_record['num_courses_visited'] = int(float(engagement_record['num_courses_visited']))
+    engagement_record['projects_completed'] = int(float(engagement_record['projects_completed']))
+    engagement_record['total_minutes_visited'] = float(engagement_record['total_minutes_visited'])
+    engagement_record['utc_date'] = parse_date(engagement_record['utc_date'])
+    
+# Clean up the data types in the submissions table
+for submission in project_submissions:
+    submission['completion_date'] = parse_date(submission['completion_date'])
+    submission['creation_date'] = parse_date(submission['creation_date'])
+    
+
+def counter(table):
+    total = 0
+    for i in table:
+        total = total + 1
+    return total
+
+def unique(table):
+    total = 0
+    lst = []
+    for i in table:
+        if i['account_key'] in lst:
+            total = total
+        else:
+            total = total + 1
+            lst.append(i['account_key'])
+    return total
+
+#print counter(project_submissions)
+#print unique(project_submissions)
+
+unique_project_sub_accounts = set()
+for i in project_submissions:
+    unique_project_sub_accounts.add(i['account_key'])
+    
+unique_enrollment_accounts = set()    
+for i in enrollments:
+    unique_enrollment_accounts.add(i['account_key'])
+
+unique_daily_engagement_accounts = set()
+for i in daily_engagement:
+    unique_daily_engagement_accounts.add(i['acct'])
+    
+
+  
+for i in daily_engagement:
+    i['account_key'] = i.pop('acct')
+    
+missing_lst = []
+def missing(table):
+    for i in table:
+        if i['account_key'] not in unique_daily_engagement_accounts:
+            print i['account_key']
+            break
+
+num = 0
+for i in enrollments:
+        if (i['account_key'] not in unique_daily_engagement_accounts and i['join_date'] != i['cancel_date']):
+            print i
+            num += 1
+            
+# Create a set of the account keys for all Udacity test accounts
+udacity_test_accounts = set()
+for enrollment in enrollments:
+    if enrollment['is_udacity']:
+        udacity_test_accounts.add(enrollment['account_key'])
+        
+def remove_udacity_accounts(data):
+    non_udacity_data = []
+    for data_point in data:
+        if data_point['account_key'] not in udacity_test_accounts:
+            non_udacity_data.append(data_point)
+    return non_udacity_data
+    
+# Remove Udacity test accounts from all three tables
+non_udacity_enrollments = remove_udacity_accounts(enrollments)
+non_udacity_engagement = remove_udacity_accounts(daily_engagement)
+non_udacity_submissions = remove_udacity_accounts(project_submissions)
+
+
+## Create a dictionary named paid_students containing all students who either
+## haven't canceled yet or who remained enrolled for more than 7 days. The keys
+## should be account keys, and the values should be the date the student enrolled.
+
+paid_students = {}
+
+for i in non_udacity_enrollments:
+    if (i['cancel_date'] is None or i['days_to_cancel'] > 7):
+        account_key = i['account_key']
+        enrollment_date = i['join_date']
+        if (account_key not in paid_students or enrollment_date > paid_students[account_key]):
+            paid_students[account_key] = enrollment_date
+            
+# Takes a student's join date and the date of a specific engagement record,
+# and returns True if that engagement record happened within one week
+# of the student joining.
+def within_one_week(join_date, engagement_date):
+    time_delta = engagement_date - join_date
+    return time_delta.days < 7 and time_delta.days >= 0
+    
+
+## Create a list of rows from the engagement table including only rows where
+## the student is one of the paid students you just found, and the date is within
+## one week of the student's join date.
+
+def remove_deleted(data):
+    new_data = []
+    for i in data:
+        if i['account_key'] in paid_students:
+            new_data.append(i)
+    return new_data
+
+paid_enrollments = remove_deleted(non_udacity_enrollments)
+paid_engagement = remove_deleted(non_udacity_engagement)
+paid_submissions = remove_deleted(non_udacity_submissions)
+
+paid_engagement_in_first_week = []
+
+for i in paid_engagement:
+    account_key = i['account_key']
+    join_date = paid_students[account_key]
+    engagement_date = i['utc_date']
+    
+    if within_one_week(join_date, engagement_date):
+        paid_engagement_in_first_week.append(i)
+
+from collections import defaultdict
+
+# Create a dictionary of engagement grouped by student.
+# The keys are account keys, and the values are lists of engagement records.
+def group_data(data, key_name):
+    grouped_data = defaultdict(list)
+    for i in data:
+        key = i[key_name]
+        grouped_data[key].append(i)
+    return grouped_data
+
+engagement_by_account = group_data(paid_engagement_in_first_week, 'account_key')
+
+# Create a dictionary with the total minutes each student spent in the classroom during the first week.
+# The keys are account keys, and the values are numbers (total minutes)
+def sum_grouped_items(grouped_data, field_name):
+    summed_data = {}
+    for key, data_points in grouped_data.items():
+        place_holder = 0
+        for i in data_points:
+            place_holder += i[field_name]
+        summed_data[key] = place_holder
+    return summed_data
+    
+total_minutes_by_account = sum_grouped_items(engagement_by_account, 'total_minutes_visited')
